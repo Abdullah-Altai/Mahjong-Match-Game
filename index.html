@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mahjong Battle</title>
+
+<style>
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+  font-family:Arial;
+  user-select:none;
+  -webkit-user-select:none;
+  touch-action:manipulation;
+}
+
+html,body{
+  width:100%;
+  min-height:100vh;
+  overflow-x:hidden;
+}
+
+body{
+  background:radial-gradient(circle at top,#137c68,#05231f,#010807);
+  color:white;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  padding:15px;
+}
+
+.game{
+  width:100%;
+  max-width:900px;
+  text-align:center;
+}
+
+.screen{
+  display:none;
+}
+
+.screen.active{
+  display:block;
+}
+
+.card{
+  background:rgba(255,255,255,.09);
+  padding:25px;
+  border-radius:25px;
+  box-shadow:0 0 30px rgba(120,255,220,.3);
+}
+
+h1{
+  color:#9fffe0;
+  margin-bottom:15px;
+}
+
+p{
+  margin:10px 0;
+  opacity:.9;
+}
+
+button{
+  border:none;
+  border-radius:25px;
+  padding:12px 24px;
+  margin:8px;
+  background:#9fffe0;
+  color:#04352d;
+  font-size:16px;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+button:disabled{
+  opacity:.4;
+  cursor:not-allowed;
+}
+
+button:hover:not(:disabled){
+  background:white;
+  transform:scale(1.04);
+}
+
+.players{
+  display:flex;
+  gap:10px;
+  margin-bottom:12px;
+}
+
+.player{
+  width:50%;
+  padding:12px;
+  border-radius:15px;
+  background:rgba(255,255,255,.12);
+}
+
+.activeTurn{
+  background:#9fffe0;
+  color:#06352d;
+  box-shadow:0 0 20px #9fffe0;
+}
+
+.info{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:8px;
+  margin-bottom:12px;
+  font-size:15px;
+}
+
+.info div{
+  background:rgba(255,255,255,.1);
+  padding:9px;
+  border-radius:12px;
+}
+
+.powerups{
+  margin-bottom:12px;
+}
+
+.board{
+  display:grid;
+  gap:9px;
+}
+
+.tile{
+  height:68px;
+  background:#9fffe0;
+  color:#05352d;
+  border-radius:13px;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  font-size:30px;
+  cursor:pointer;
+  box-shadow:0 5px 0 #45aa92;
+  transition:.2s;
+}
+
+.tile.selected{
+  background:white;
+  transform:scale(1.05);
+}
+
+.tile.matched{
+  opacity:0;
+  pointer-events:none;
+}
+
+.tile.hint{
+  outline:4px solid gold;
+}
+
+.shake{
+  animation:shake .3s;
+}
+
+@keyframes shake{
+  0%{transform:translateX(0)}
+  25%{transform:translateX(8px)}
+  50%{transform:translateX(-8px)}
+  75%{transform:translateX(8px)}
+  100%{transform:translateX(0)}
+}
+
+.pop{
+  animation:pop .35s;
+}
+
+@keyframes pop{
+  0%{transform:scale(1)}
+  50%{transform:scale(1.25)}
+  100%{transform:scale(1)}
+}
+
+.achievement{
+  position:fixed;
+  top:20px;
+  left:50%;
+  transform:translateX(-50%);
+  background:#9fffe0;
+  color:#06352d;
+  padding:12px 25px;
+  border-radius:25px;
+  font-weight:bold;
+  display:none;
+  z-index:99;
+}
+
+.resultText{
+  font-size:23px;
+  line-height:1.8;
+}
+
+@media(max-width:550px){
+  .tile{
+    height:55px;
+    font-size:23px;
+  }
+
+  .info{
+    grid-template-columns:repeat(2,1fr);
+    font-size:13px;
+  }
+
+  button{
+    font-size:14px;
+    padding:10px 16px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="achievement" id="achievementBox"></div>
+
+<div class="game">
+
+  <div id="startScreen" class="screen active">
+    <div class="card">
+      <h1>🎴 Mahjong Battle</h1>
+      <p>لعبة مطابقة للاعبين من 3 مراحل</p>
+      <p>إذا اللاعب طابق صح يكمل دوره، إذا غلط يتحول الدور للاعب الثاني</p>
+
+      <button onclick="startGame(false)">لعبة جديدة</button>
+      <button onclick="loadSavedGame()">إكمال آخر لعبة</button>
+    </div>
+  </div>
+
+  <div id="gameScreen" class="screen">
+    <h1 id="levelTitle"></h1>
+
+    <div class="players">
+      <div id="player1Box" class="player activeTurn">
+        Player 1: <span id="p1Score">0</span>
+      </div>
+      <div id="player2Box" class="player">
+        Player 2: <span id="p2Score">0</span>
+      </div>
+    </div>
+
+    <div class="info">
+      <div>الدور: <span id="turnText">Player 1</span></div>
+      <div>الوقت: <span id="timeText">60</span></div>
+      <div>المحاولات: <span id="movesText">0</span></div>
+      <div>الأزواج: <span id="pairsText">0/0</span></div>
+    </div>
+
+    <div class="powerups">
+      <button id="revealBtn" onclick="revealPower()">🔍 كشف 2 ثانية</button>
+      <button id="hintBtn" onclick="hintPower()">💡 تلميح</button>
+      <button id="freezeBtn" onclick="freezePower()">⏱️ تجميد الوقت</button>
+    </div>
+
+    <div class="board" id="board"></div>
+
+    <button onclick="saveGame()">💾 حفظ التقدم</button>
+    <button onclick="startGame(false)">🔄 إعادة من البداية</button>
+  </div>
+
+  <div id="endScreen" class="screen">
+    <div class="card">
+      <h1>🏆 انتهت اللعبة</h1>
+      <div class="resultText" id="finalResult"></div>
+      <button onclick="startGame(false)">إعادة اللعب</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+document.addEventListener("gesturestart", e => e.preventDefault());
+document.addEventListener("dblclick", e => e.preventDefault());
+
+let lastTouchEnd = 0;
+document.addEventListener("touchend", function(e){
+  let now = Date.now();
+  if(now - lastTouchEnd <= 300) e.preventDefault();
+  lastTouchEnd = now;
+}, false);
+
+const levels = [
+  {
+    name:"المرحلة 1 - سهلة",
+    cols:4,
+    time:70,
+    icons:["⭐","🔥","🍀","💎","⚽","🚗"]
+  },
+  {
+    name:"المرحلة 2 - متوسطة",
+    cols:5,
+    time:80,
+    icons:["⭐","🔥","🍀","💎","⚽","🚗","🌙","☀️","🎵","🍎"]
+  },
+  {
+    name:"المرحلة 3 - صعبة",
+    cols:6,
+    time:100,
+    icons:["⭐","🔥","🍀","💎","⚽","🚗","🌙","☀️","🎵","🍎","🐍","🏆","👑","🎲","🚀"]
+  }
+];
+
+const startScreen = document.getElementById("startScreen");
+const gameScreen = document.getElementById("gameScreen");
+const endScreen = document.getElementById("endScreen");
+const board = document.getElementById("board");
+
+let currentLevel = 0;
+let tiles = [];
+let firstTile = null;
+let secondTile = null;
+let lockBoard = false;
+
+let p1Score = 0;
+let p2Score = 0;
+let currentPlayer = 1;
+let moves = 0;
+let matchedPairs = 0;
+let totalPairs = 0;
+
+let timeLeft = 0;
+let timer = null;
+let frozen = false;
+let streak = 0;
+
+let powerUsed = {
+  reveal:false,
+  hint:false,
+  freeze:false
+};
+
+function sound(type){
+  const audio = new AudioContext();
+  const osc = audio.createOscillator();
+  const gain = audio.createGain();
+
+  osc.connect(gain);
+  gain.connect(audio.destination);
+
+  if(type === "click") osc.frequency.value = 500;
+  if(type === "correct") osc.frequency.value = 900;
+  if(type === "wrong") osc.frequency.value = 180;
+  if(type === "win") osc.frequency.value = 1200;
+
+  gain.gain.value = 0.08;
+  osc.start();
+
+  setTimeout(() => {
+    osc.stop();
+    audio.close();
+  }, 120);
+}
+
+function showScreen(screen){
+  startScreen.classList.remove("active");
+  gameScreen.classList.remove("active");
+  endScreen.classList.remove("active");
+  screen.classList.add("active");
+}
+
+function startGame(fromSave){
+  clearInterval(timer);
+
+  if(!fromSave){
+    currentLevel = 0;
+    p1Score = 0;
+    p2Score = 0;
+    currentPlayer = 1;
+  }
+
+  showScreen(gameScreen);
+  loadLevel();
+}
+
+function loadLevel(){
+  const level = levels[currentLevel];
+
+  board.innerHTML = "";
+  board.style.gridTemplateColumns = `repeat(${level.cols}, 1fr)`;
+
+  document.getElementById("levelTitle").innerHTML = level.name;
+
+  firstTile = null;
+  secondTile = null;
+  lockBoard = false;
+  moves = 0;
+  matchedPairs = 0;
+  totalPairs = level.icons.length;
+  timeLeft = level.time;
+  streak = 0;
+
+  powerUsed = {
+    reveal:false,
+    hint:false,
+    freeze:false
+  };
+
+  updatePowerButtons();
+  updateUI();
+
+  tiles = [...level.icons, ...level.icons];
+  tiles.sort(() => Math.random() - 0.5);
+
+  tiles.forEach(icon => {
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    tile.dataset.icon = icon;
+    tile.innerHTML = "❓";
+    tile.onclick = () => flipTile(tile);
+    board.appendChild(tile);
+  });
+
+  startTimer();
+}
+
+function startTimer(){
+  clearInterval(timer);
+
+  timer = setInterval(() => {
+    if(!frozen){
+      timeLeft--;
+      document.getElementById("timeText").innerHTML = timeLeft;
+    }
+
+    if(timeLeft <= 0){
+      clearInterval(timer);
+      alert("انتهى الوقت! يتحول الدور للاعب الثاني ⏰");
+      changePlayer();
+      loadLevel();
+    }
+  }, 1000);
+}
+
+function flipTile(tile){
+  if(lockBoard) return;
+  if(tile === firstTile) return;
+  if(tile.classList.contains("matched")) return;
+
+  sound("click");
+
+  tile.innerHTML = tile.dataset.icon;
+  tile.classList.add("selected");
+
+  if(!firstTile){
+    firstTile = tile;
+    return;
+  }
+
+  secondTile = tile;
+  moves++;
+  checkMatch();
+}
+
+function checkMatch(){
+  if(firstTile.dataset.icon === secondTile.dataset.icon){
+    sound("correct");
+
+    firstTile.classList.add("matched","pop");
+    secondTile.classList.add("matched","pop");
+
+    if(currentPlayer === 1) p1Score++;
+    else p2Score++;
+
+    matchedPairs++;
+    streak++;
+
+    if(streak === 3){
+      showAchievement("🔥 3 مطابقات متتالية!");
+    }
+
+    if(matchedPairs === totalPairs){
+      clearInterval(timer);
+      setTimeout(nextLevel, 700);
+    }
+
+    resetTurn();
+    updateUI();
+    saveGame();
+
+  }else{
+    sound("wrong");
+    streak = 0;
+    lockBoard = true;
+    document.body.classList.add("shake");
+
+    setTimeout(() => {
+      document.body.classList.remove("shake");
+
+      firstTile.innerHTML = "❓";
+      secondTile.innerHTML = "❓";
+      firstTile.classList.remove("selected");
+      secondTile.classList.remove("selected");
+
+      changePlayer();
+      resetTurn();
+      updateUI();
+    }, 800);
+  }
+}
+
+function resetTurn(){
+  firstTile = null;
+  secondTile = null;
+  lockBoard = false;
+}
+
+function changePlayer(){
+  currentPlayer = currentPlayer === 1 ? 2 : 1;
+}
+
+function updateUI(){
+  document.getElementById("p1Score").innerHTML = p1Score;
+  document.getElementById("p2Score").innerHTML = p2Score;
+  document.getElementById("turnText").innerHTML = currentPlayer === 1 ? "Player 1" : "Player 2";
+  document.getElementById("movesText").innerHTML = moves;
+  document.getElementById("timeText").innerHTML = timeLeft;
+  document.getElementById("pairsText").innerHTML = matchedPairs + "/" + totalPairs;
+
+  const p1Box = document.getElementById("player1Box");
+  const p2Box = document.getElementById("player2Box");
+
+  if(currentPlayer === 1){
+    p1Box.classList.add("activeTurn");
+    p2Box.classList.remove("activeTurn");
+  }else{
+    p2Box.classList.add("activeTurn");
+    p1Box.classList.remove("activeTurn");
+  }
+}
+
+function revealPower(){
+  if(powerUsed.reveal) return;
+
+  powerUsed.reveal = true;
+  updatePowerButtons();
+
+  const allTiles = document.querySelectorAll(".tile:not(.matched)");
+  allTiles.forEach(tile => tile.innerHTML = tile.dataset.icon);
+
+  setTimeout(() => {
+    allTiles.forEach(tile => {
+      if(!tile.classList.contains("matched") && !tile.classList.contains("selected")){
+        tile.innerHTML = "❓";
+      }
+    });
+  }, 2000);
+}
+
+function hintPower(){
+  if(powerUsed.hint) return;
+
+  powerUsed.hint = true;
+  updatePowerButtons();
+
+  const available = [...document.querySelectorAll(".tile:not(.matched)")];
+
+  for(let i = 0; i < available.length; i++){
+    for(let j = i + 1; j < available.length; j++){
+      if(available[i].dataset.icon === available[j].dataset.icon){
+        available[i].classList.add("hint");
+        available[j].classList.add("hint");
+
+        setTimeout(() => {
+          available[i].classList.remove("hint");
+          available[j].classList.remove("hint");
+        }, 1500);
+
+        return;
+      }
+    }
+  }
+}
+
+function freezePower(){
+  if(powerUsed.freeze) return;
+
+  powerUsed.freeze = true;
+  frozen = true;
+  updatePowerButtons();
+
+  showAchievement("⏱️ تم تجميد الوقت 5 ثواني");
+
+  setTimeout(() => {
+    frozen = false;
+  }, 5000);
+}
+
+function updatePowerButtons(){
+  document.getElementById("revealBtn").disabled = powerUsed.reveal;
+  document.getElementById("hintBtn").disabled = powerUsed.hint;
+  document.getElementById("freezeBtn").disabled = powerUsed.freeze;
+}
+
+function nextLevel(){
+  sound("win");
+
+  if(timeLeft > 40){
+    showAchievement("⚡ أنهيت المرحلة بسرعة!");
+  }
+
+  currentLevel++;
+
+  if(currentLevel < levels.length){
+    alert("ممتاز! انتقلت للمرحلة التالية 🔥");
+    loadLevel();
+  }else{
+    endGame();
+  }
+}
+
+function endGame(){
+  clearInterval(timer);
+  localStorage.removeItem("mahjongSave");
+
+  showScreen(endScreen);
+
+  let winner = "";
+
+  if(p1Score > p2Score){
+    winner = "الفائز هو Player 1 🎉";
+  }else if(p2Score > p1Score){
+    winner = "الفائز هو Player 2 🎉";
+  }else{
+    winner = "تعادل 🤝";
+  }
+
+  document.getElementById("finalResult").innerHTML =
+    `Player 1: ${p1Score}<br>
+     Player 2: ${p2Score}<br>
+     المحاولات الأخيرة: ${moves}<br><br>
+     ${winner}`;
+}
+
+function showAchievement(text){
+  const box = document.getElementById("achievementBox");
+  box.innerHTML = text;
+  box.style.display = "block";
+
+  setTimeout(() => {
+    box.style.display = "none";
+  }, 2200);
+}
+
+function saveGame(){
+  const data = {
+    currentLevel,
+    p1Score,
+    p2Score,
+    currentPlayer
+  };
+
+  localStorage.setItem("mahjongSave", JSON.stringify(data));
+}
+
+function loadSavedGame(){
+  const saved = localStorage.getItem("mahjongSave");
+
+  if(!saved){
+    alert("ماكو حفظ سابق");
+    return;
+  }
+
+  const data = JSON.parse(saved);
+
+  currentLevel = data.currentLevel;
+  p1Score = data.p1Score;
+  p2Score = data.p2Score;
+  currentPlayer = data.currentPlayer;
+
+  startGame(true);
+}
+</script>
+
+</body>
+</html>
